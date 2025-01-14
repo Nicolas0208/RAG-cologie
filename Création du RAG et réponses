@@ -1,0 +1,100 @@
+import os
+import requests
+from bs4 import BeautifulSoup
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+import pandas as pd
+from mistralai import Mistral
+
+# Ajouter la clé API via une variable d'environnement pour plus de sécurité
+os.environ["MISTRAL_API_KEY"] = "lK1NwG7hj6RvhEjj5V17f4iAmSQsuur7"
+
+# Initialisation
+api_key = os.getenv("MISTRAL_API_KEY")
+if not api_key:
+    raise ValueError("Clé API manquante. Ajoutez une clé valide pour Mistral.")
+
+mistral = Mistral(api_key=api_key)
+
+# Liste des URLs
+webpage_urls = [
+    "https://climat.be/changements-climatiques/changements-observes/rapports-du-giec",
+    "https://www.ecologie.gouv.fr/actualites/publication-du-6e-rapport-synthese-du-giec",
+    "https://bigmedia.bpifrance.fr/nos-dossiers/dernier-rapport-du-giec-le-resume-en-10-points-cles",
+    "https://www.reseaucritiquesdeveloppementdurable.fr/",
+    "https://www.nationalgeographic.fr/thematique/sujet/environnement/preoccupations-environnementales/changement-climatique",
+    "https://www.mnhn.fr/fr/biodiversite-environnement"
+    "https://www.ofb.gouv.fr/quest-ce-que-la-biodiversite"
+    "https://www.notre-environnement.gouv.fr/themes/biodiversite/article/la-connaissance-de-la-biodiversite"
+    "https://www.lemonde.fr/sciences/article/2024/06/11/pour-accompagner-la-transition-ecologique-il-est-urgent-de-renforcer-l-enseignement-scientifique-et-experientiel-a-l-ecole_6238675_1650684.html?utm_source=chatgpt.com"
+]
+
+# Fonction pour extraire le texte d'une page web
+def extract_text_from_webpage(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.content, 'html.parser')
+    text = soup.get_text(separator=' ', strip=True)
+    return text
+
+# Extraction des contenus des pages web
+documents = [extract_text_from_webpage(url) for url in webpage_urls]
+
+# Indexation avec TF-IDF
+vectorizer = TfidfVectorizer()
+tfidf_matrix = vectorizer.fit_transform(documents)
+
+# Fonction pour récupérer les documents pertinents
+def retrieve_documents(query, tfidf_matrix, vectorizer, top_k=2):
+    query_vec = vectorizer.transform([query])
+    cosine_similarities = linear_kernel(query_vec, tfidf_matrix).flatten()
+    related_docs_indices = cosine_similarities.argsort()[:-top_k-1:-1]
+    return [documents[i] for i in related_docs_indices]
+
+# Fonction pour générer une réponse avec l'API Mistral
+def generate_response(query, context):
+    # Envoi de la requête à l'API Mistral
+    response = mistral.chat.complete(
+        model="ministral-3b-2410",
+        messages=[{
+            "role": "user",
+            #utilise les questions de mon csv inition ecolo.csv
+            "content": question 
+        }],
+        temperature=0.7,
+        max_tokens=1000
+    )
+    
+    # Inspection de la structure de la réponse
+    print("Réponse brute Mistral :", response)  # Vérification de la structure
+    
+    # Extraction correcte de la réponse selon son format
+    if hasattr(response, "choices") and response.choices:
+        return response.choices[0].message.content
+    else:
+        raise ValueError("La réponse de l'API Mistral n'est pas au format attendu.")
+
+# Lire les questions à partir du fichier CSV
+input_file = "ecolo.csv"
+df = pd.read_csv(input_file)
+
+# Générer les réponses pour chaque question
+results = []
+for question in df['Questions']:
+    # Recherche de documents pertinents
+    relevant_docs = retrieve_documents(question, tfidf_matrix, vectorizer)
+    context = " ".join(relevant_docs)
+    
+    # Génération de réponse avec Mistral
+    try:
+        response = generate_response(question, context)
+        results.append({"Questions": question, "Réponses": response})
+    except Exception as e:
+        print(f"Erreur pour la question '{question}': {e}")
+        results.append({"Questions": question, "Réponses": "Erreur lors de la génération de la réponse"})
+
+# Sauvegarder les résultats dans un fichier CSV
+output_file = "ecolo2.csv"
+output_df = pd.DataFrame(results)
+output_df.to_csv(output_file, index=False, encoding='utf-8')
+
+print(f"Les réponses ont été générées et enregistrées dans le fichier {output_file}.")
