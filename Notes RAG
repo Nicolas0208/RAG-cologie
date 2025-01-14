@@ -1,0 +1,105 @@
+import pandas as pd
+import time
+from mistralai import Mistral
+
+# Ajouter la clé API via une variable d'environnement pour plus de sécurité
+os.environ["MISTRAL_API_KEY"] = "lK1NwG7hj6RvhEjj5V17f4iAmSQsuur7"
+
+# Initialisation
+api_key = os.getenv("MISTRAL_API_KEY")
+if not api_key:
+    raise ValueError("Clé API manquante. Ajoutez une clé valide pour Mistral.")
+mistral = Mistral(api_key=api_key)
+
+def get_note_rag(question, reponse):
+    """
+    Évalue la qualité d'une réponse par rapport à une question en utilisant Mistral.
+    Inclut une gestion de backoff pour éviter l'erreur 429.
+    """
+    backoff_time = 1  # Temps initial entre les tentatives (en secondes)
+    while True:
+        try:
+            response = mistral.chat.complete(
+                model="ministral-3b-2410",  # Modèle à utiliser
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Donne une note précise sur 100 pour la qualité de cette réponse : "
+                                   f"Question : {question}, Réponse : {reponse}, réponds que par le nombre de la note, pas de texte, je veux entre 1 et 3 chiffres en sortie"
+                    }
+                ],
+                temperature=0.7,
+                max_tokens=10000
+            )
+            # Pause après une requête réussie pour éviter les limites
+            time.sleep(2)  # Ajustez la pause si nécessaire
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"Erreur : {e}")
+            if "Requests rate limit exceeded" in str(e):
+                print(f"Limite de requêtes dépassée. Attente de {backoff_time} secondes avant de réessayer...")
+                time.sleep(backoff_time)
+                backoff_time = min(backoff_time * 2, 60)  # Augmente progressivement le délai jusqu'à 60s
+            else:
+                return "Erreur lors de l'évaluation"
+def extract_note_rag_from_response(response_text):
+    """
+    Extrait une note numérique d'une réponse textuelle.
+    """
+    try:
+        # Rechercher un nombre dans la réponse textuelle
+        note_rag = int(''.join(filter(str.isdigit, response_text)))
+        return note_rag
+    except ValueError:
+        print(f"Impossible d'extraire une note valide de : {response_text}")
+        return None
+
+def process_csv(file_name):
+    """
+    Lit un fichier CSV contenant des questions et des réponses, attribue une note à chaque réponse,
+    et sauvegarde les résultats dans un nouveau fichier.
+    """
+    try:
+        # Charger le fichier CSV
+        df = pd.read_csv(file_name)
+
+        # Vérification des colonnes nécessaires
+        if 'Questions' not in df.columns or 'Réponses' not in df.columns:
+            raise ValueError("Les colonnes 'Questions' et 'Réponses' sont nécessaires dans le fichier CSV.")
+
+        # Ajouter une colonne pour les notes si elle n'existe pas
+        if 'Note_RAG' not in df.columns:
+            df['Note_RAG'] = None
+
+        # Traitement par lots pour éviter l'erreur 429
+        batch_size = 30  # Nombre de lignes à traiter par lot
+        pause_between_batches = 2  # Pause entre les lots (en secondes)
+
+        for start in range(0, len(df), batch_size):
+            end = min(start + batch_size, len(df))
+            batch = df.iloc[start:end]
+
+            # Traiter chaque ligne du lot
+            for index, row in batch.iterrows():
+                if pd.isna(row['Note_RAG']):  # Évaluer uniquement si la note est manquante
+                    print(f"Traitement de la ligne {index + 1}/{len(df)}")
+                    note_rag = get_note_rag(row['Questions'], row['Réponses'])
+                    df.at[index, 'Note_RAG'] = extract_note_rag_from_response(note_rag)
+
+            # Pause entre les lots
+            print(f"Pause de {pause_between_batches} secondes entre les lots...")
+            time.sleep(pause_between_batches)
+
+        # Sauvegarder les résultats dans un nouveau fichier
+        output_file = "ecolo_reponses_notees2.csv"
+        df.to_csv(output_file, index=False)
+        print(f"Fichier sauvegardé avec succès sous le nom : {output_file}")
+
+    except FileNotFoundError:
+        print(f"Le fichier {file_name} est introuvable.")
+    except Exception as e:
+        print(f"Erreur lors du traitement : {e}")
+
+# Lancer le script
+if __name__ == "__main__":
+    process_csv("ecolo2.csv")  # Remplacez par le nom réel de votre fichier CSV
