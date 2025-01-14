@@ -1,0 +1,43 @@
+import pandas as pd
+from mistralai import Mistral
+import os
+
+# Ajouter la clé API via une variable d'environnement pour plus de sécurité
+os.environ["MISTRAL_API_KEY"] = "lK1NwG7hj6RvhEjj5V17f4iAmSQsuur7"
+
+# Initialisation
+api_key = os.getenv("MISTRAL_API_KEY")
+if not api_key:
+    raise ValueError("Clé API manquante. Ajoutez une clé valide pour Mistral.")
+
+mistral = Mistral(api_key=api_key)
+
+# Lire les questions à partir du fichier CSV
+input_file = "ecolo.csv"
+df = pd.read_csv(input_file)
+
+# Liste pour stocker les réponses
+responses = []
+
+# Envoyer chaque question à l'API Mistral et obtenir une réponse
+for question in df['Questions']:
+    response = mistral.chat.complete(
+        model="ministral-3b-2410",
+        messages=[{
+            "role": "user",
+            "content": question
+        }],
+        temperature=0.7,
+        max_tokens=4000
+    )
+    # Extraire la réponse
+    answer = response.choices[0].message.content
+    responses.append(answer)
+
+# Ajouter les réponses au DataFrame
+df['Réponses'] = responses
+
+# Exporter les données dans un nouveau fichier CSV
+output_file = "ecolo_reponses.csv"
+df.to_csv(output_file, index=False)
+print(f"Les réponses ont été exportées dans {output_file}")
