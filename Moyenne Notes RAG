@@ -1,0 +1,45 @@
+import pandas as pd
+
+def calculate_average_from_csv(file_name, column_name="Note_RAG"):
+    """
+    Calcule la moyenne des valeurs d'une colonne spécifiée dans un fichier CSV.
+    
+    Args:
+        file_name (str): Le nom du fichier CSV.
+        column_name (str): Le nom de la colonne contenant les notes. Par défaut, 'Note'.
+    
+    Returns:
+        float: La moyenne des valeurs non nulles de la colonne, ou None si la colonne est vide.
+    """
+    try:
+        # Charger le fichier CSV
+        df = pd.read_csv(file_name)
+        
+        # Vérifier si la colonne existe
+        if column_name in df.columns:
+            # Filtrer les valeurs non nulles
+            notes = df[column_name].dropna()
+            
+            # Calculer la moyenne
+            if not notes.empty:
+                average = notes.mean()
+                print(f"La moyenne des notes dans la colonne '{column_name}' est : {average:.2f}")
+                return average
+            else:
+                print(f"La colonne '{column_name}' ne contient aucune valeur.")
+                return None
+        else:
+            print(f"La colonne '{column_name}' est introuvable dans le fichier {file_name}.")
+            return None
+    except FileNotFoundError:
+        print(f"Le fichier {file_name} est introuvable.")
+        return None
+    except Exception as e:
+        print(f"Erreur lors du traitement : {e}")
+        return None
+
+# Utilisation de la fonction
+if __name__ == "__main__":
+    # Remplacez 'ecolo_reponses_notees.csv' par le chemin exact de votre fichier
+    file_name = "ecolo_reponses_notees2.csv"
+    calculate_average_from_csv(file_name, column_name="Note_RAG")
