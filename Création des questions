@@ -1,0 +1,50 @@
+import pandas as pd
+from mistralai import Mistral
+import os
+
+# Ajouter la clé API via une variable d'environnement pour plus de sécurité
+os.environ["MISTRAL_API_KEY"] = "lK1NwG7hj6RvhEjj5V17f4iAmSQsuur7"
+
+# Initialisation
+api_key = os.getenv("MISTRAL_API_KEY")
+if not api_key:
+    raise ValueError("Clé API manquante. Ajoutez une clé valide pour Mistral.")
+mistral = Mistral(api_key=api_key)
+
+# Appel à l'API Mistral pour générer les questions
+response = mistral.chat.complete(
+    model="ministral-3b-2410",
+    messages=[{
+        "role": "user",
+        "content": "Génère 100 questions ouvertes techniques liées à l'écologie\n"
+    }],
+    temperature=0.7,
+    max_tokens=2500
+)
+
+# Imprimer la réponse pour vérifier sa structure
+print(response)
+
+# Extraire les questions de la réponse
+questions = response.choices[0].message.content.split('\n')
+
+# Filtrer et nettoyer les questions
+filtered_questions = []
+for line in questions:
+    if line.strip() and not (
+        line.strip().startswith("Bien sûr") or 
+        line.strip().startswith("Ces questions")
+    ):
+        filtered_questions.append(line.strip())
+
+# Supprimer les doublons tout en préservant l'ordre
+unique_questions = list(dict.fromkeys(filtered_questions))
+
+# Créer un DataFrame
+data = {"Questions": unique_questions}
+df = pd.DataFrame(data)
+
+# Exporter les données dans un fichier CSV
+output_file = "ecolo.csv"
+df.to_csv(output_file, index=False)
+print(f"Les données ont été exportées dans {output_file}")
