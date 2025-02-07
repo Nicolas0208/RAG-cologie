@@ -3,7 +3,7 @@ from mistralai import Mistral
 import os
 
 # Ajouter la clé API via une variable d'environnement pour plus de sécurité
-os.environ["MISTRAL_API_KEY"] = "lK1NwG7hj6RvhEjj5V17f4iAmSQsuur7"
+os.environ["MISTRAL_API_KEY"] = "clé API"
 
 # Initialisation
 api_key = os.getenv("MISTRAL_API_KEY")
